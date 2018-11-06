@@ -56,8 +56,7 @@
 EventGroupHandle_t rec_event_group;
 
 void  rec_event_task(void);
-extern 
-void restart_rec(void);
+
 
 #ifdef __cplusplus
 }

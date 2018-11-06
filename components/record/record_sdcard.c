@@ -136,13 +136,11 @@ void rec_event_task(void)
 
 	ESP_LOGI(TAG, "RAM left: %u", esp_get_free_heap_size());
     audio_pipeline_terminate(pipeline_event);
-
     audio_pipeline_deinit(pipeline_event);
     audio_element_deinit(fatfs_event);
     audio_element_deinit(i2s_event);    
     vEventGroupDelete(rec_event_group);
-//	ESP_LOGI(TAG, "RAM left: %u", esp_get_free_heap_size());	
-    xTaskCreate((void*)restart_rec, "restart_rec_task", 2048, NULL, 9, NULL);
+//	ESP_LOGI(TAG, "RAM left: %u", esp_get_free_heap_size());
 	ESP_LOGI(TAG, "record task will be deleted!");
 	vTaskDelete(NULL);
 }

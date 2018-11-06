@@ -122,18 +122,6 @@ void app_main()
 	vTaskDelete(NULL);
 
 }
-void restart_rec(void)
-{
-	char fntmbuf[20];
 
-    ESP_LOGE(TAG, "RAM left: %u", esp_get_free_heap_size());
-	ESP_LOGE(TAG, "restart to record!");
-	app_ble_open();
-    esp_ble_gap_start_scanning(0);    
-    xTaskCreate((void*)rec_event_task, "rec_event_task", 4096, NULL, 10, NULL);
-
-	ESP_LOGE(TAG, "restart_rec task will be deleted!");
-	vTaskDelete(NULL);
-}
 
 
