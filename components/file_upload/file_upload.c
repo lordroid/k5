@@ -51,12 +51,6 @@
 #define BUFFSIZE 		1500
 
 
-
-#define TIMER_DIVIDER         20  //  Hardware timer clock divider
-#define TIMER_SCALE           (TIMER_BASE_CLK / TIMER_DIVIDER)  // convert counter value to seconds
-
-
-
 /*FTP返回状态*/
  enum ftp_results {
   FTP_RESULT_OK=0,
@@ -132,28 +126,8 @@ static void ftp_control_process(ftp_session_t *s, struct tcp_pcb *tpcb, struct p
  *
  *
 ***************************************************************/
-static void inline print_timer_counter(uint64_t counter_value)
-{
-    printf("Counter: 0x%08x%08x\n", (uint32_t) (counter_value >> 32),
-                                    (uint32_t) (counter_value));
-    printf("Time   : %.8f s\n", (double) counter_value / TIMER_SCALE);
-}
-static void tg0_timer_init(int timer_idx, 
-    bool auto_reload)
-{
-    /* Select and initialize basic parameters of the timer */
-    timer_config_t config;
-    config.divider = TIMER_DIVIDER;
-    config.counter_dir = TIMER_COUNT_UP;
-    config.counter_en = TIMER_PAUSE;
-    config.alarm_en = TIMER_ALARM_DIS;
-    config.intr_type = TIMER_INTR_LEVEL;
-    config.auto_reload = auto_reload;
-    timer_init(TIMER_GROUP_0, timer_idx, &config);
-    timer_set_counter_value(TIMER_GROUP_0, timer_idx, 0x00000000ULL);
-    /* Configure the alarm value and the interrupt on alarm. */
 
-}
+
 
 
 /*****************************************************************
@@ -228,36 +202,30 @@ static err_t ftp_data_sent(void *arg, struct tcp_pcb *tpcb, struct pbuf *p, err_
 {
   int readlen=0;
   ftp_session_t *s = (ftp_session_t*)arg;
-//  uint64_t task_counter_value;
-//  timer_get_counter_value(TIMER_GROUP_0, TIMER_0, &task_counter_value);
-//  print_timer_counter(task_counter_value);  
   
   if (p)
   {
       	readlen=fread((void*)filebuf,1,2000,f2stor);
-//        dbgcnt++;
+
 		if(readlen>0)
-//        if(dbgcnt<3500)
-		{
+
 		    
  		    readlen = tcp_write(s->data_pcb, filebuf,readlen, 0);
 			tcp_output(s->data_pcb);
-//			timer_set_counter_value(TIMER_GROUP_0, TIMER_0, 0x00000000ULL);
+
             if ( readlen != ERR_OK ) {
 	            ESP_LOGI(TAG, "ftp:stor file cannot write (%s)\n",lwip_strerr(readlen));
             }           
 		}
 		else
 		{   
-//		    timer_pause(TIMER_GROUP_0,TIMER_0);
-//		    get_time_sec(dbgtm);
-//            ESP_LOGI(TAG, "a file have been uploaded ,the time is %s\n",dbgtm);
+
             ESP_LOGI(TAG, "file stor done\n");
 			fclose(f2stor);
 			ftp_pcb_close(s->data_pcb);
-//			free(s->data_pcb);
+
 			s->data_pcb=NULL;
-//			xEventGroupSetBits(ftp_event_group, FTP_STOR_DONE);
+
 		}
   }
   
@@ -297,12 +265,7 @@ static err_t ftp_data_connected(void *arg, struct tcp_pcb *tpcb, err_t err)
 
   if ( err == ERR_OK ) {
 	ESP_LOGI(TAG, "ftp:connected for data to server\n");
-//	f2stor=fopen(fstor,"rb");
-//    if(f2stor==NULL)
-//	{
-//	    ESP_LOGI(TAG, "open file %s failed!\n",fstor);
-//	    return;
-//    }
+
 	s->data_state = FTP_CONNECTED;
     xEventGroupSetBits(ftp_event_group, FTP_DATALINK_OK);
   } else {
@@ -326,12 +289,7 @@ static err_t ftp_data_getport(ftp_session_t *s, struct pbuf *p)
 	  // Find server connection parameter
 	  ptr = strchr(p->payload, '(');
 	  if (!ptr) return ERR_BUF;
-//	  do {
-//		ip_temp = strtoul(ptr+1,&ptr,10);
-//		ip_temp = strtoul(ptr+1,&ptr,10);
-//		ip_temp = strtoul(ptr+1,&ptr,10);
-//		ip_temp = strtoul(ptr+1,&ptr,10);
-//	  } while(0);
+
 	  data_port  = strtoul(ptr+1,&ptr,10) << 8;
 	  data_port |= strtoul(ptr+1,&ptr,10) & 255;
 	  s->data_port=data_port;
@@ -365,13 +323,10 @@ static err_t ftp_data_open(ftp_session_t *s,struct pbuf *p)
 	
 	// Open data session
 	tcp_arg(s->data_pcb, s);
-//	ESP_LOGI(TAG, "FTP data open tcp_arg done");
+
 	tcp_err(s->data_pcb, ftp_data_err);
-//	ESP_LOGI(TAG, "FTP data open tcp_err done");
 	tcp_recv(s->data_pcb, ftp_data_recv);
-//	ESP_LOGI(TAG, "FTP data open tcp_rece done");
 	tcp_sent(s->data_pcb, ftp_data_sent);
-//	ESP_LOGI(TAG, "FTP data open tcp_sent done");
 	error = tcp_connect(s->data_pcb, &s->server_ip, data_port, ftp_data_connected);
 	return error;
 
@@ -969,8 +924,6 @@ static void ftp_ul_task(void *pvParameter)
 	ftp_connect(&ftp_config);
    	xEventGroupWaitBits(ftp_event_group, FTP_LOGEING_OK|FTP_ALL_DONE, pdFALSE, pdFALSE, portMAX_DELAY);//用户名密码发送成功，登录FTP服务器成功
     if(xEventGroupGetBits(ftp_event_group)&FTP_LOGEING_OK)
-//    ftp_CWD(&ftp_config,ftp_config.remote_path);
-//    xEventGroupWaitBits(ftp_event_group, FTP_CWD_DONE, pdFALSE, pdFALSE, portMAX_DELAY);//目录转换成功 
     {   
         xEventGroupClearBits(ftp_event_group,FTP_LOGEING_OK);
         ftp_MKD(&ftp_config, dirname);
@@ -1008,9 +961,7 @@ static void ftp_ul_task(void *pvParameter)
 		       }
 		       else  if(filecnt==wfile_num)
 		       {
-//	        xEventGroupClearBits(ftp_event_group, FTP_CWD_DONE);
-//			ftp_CWD(&ftp_config,ftp_config.remote_path);
-//            xEventGroupWaitBits(ftp_event_group, FTP_CWD_DONE, pdFALSE, pdFALSE, portMAX_DELAY);//目录转换成功 
+
                    xEventGroupClearBits(ftp_event_group, FTP_CWD_DONE);
                    ftp_CWD(&ftp_config,dirname);
                    xEventGroupWaitBits(ftp_event_group, FTP_CWD_DONE, pdFALSE, pdFALSE, portMAX_DELAY);//目录转换成功  		    
@@ -1090,8 +1041,8 @@ void ftp_ul_process(int filenum,char* uptm)
 {
 
     char concnt=0;
-//	esp_log_level_set("*", ESP_LOG_INFO);
-//	esp_log_level_set(TAG, ESP_LOG_INFO);
+	esp_log_level_set("*", ESP_LOG_INFO);
+	esp_log_level_set(TAG, ESP_LOG_INFO);
 	
     ESP_LOGI(TAG, "Initialising ftpupload");
 	sprintf(dirname,"/%013d#%s",get_device_id(),uptm);
