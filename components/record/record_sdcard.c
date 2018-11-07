@@ -14,7 +14,7 @@
 
 static const char *TAG = "REC_SDCARD";
 
-#define RECORD_TIME_SECONDS (30)
+#define RECORD_TIME_SECONDS (60)
 static FILE* frec;
 static int filenamecnt=1,mincnt=0,rec_start=0;
 static char recfilename[30];

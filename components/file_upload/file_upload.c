@@ -87,6 +87,7 @@
   FTP_CWD_SENT,
   FTP_MKD_SENT,
   FTP_CLOSING,
+  FTP_IDLE,
 } ftp_state_t;
 
 /*FTP会话结构*/
@@ -208,7 +209,7 @@ static err_t ftp_data_sent(void *arg, struct tcp_pcb *tpcb, struct pbuf *p, err_
       	readlen=fread((void*)filebuf,1,2000,f2stor);
 
 		if(readlen>0)
-
+		{
 		    
  		    readlen = tcp_write(s->data_pcb, filebuf,readlen, 0);
 			tcp_output(s->data_pcb);
@@ -223,9 +224,7 @@ static err_t ftp_data_sent(void *arg, struct tcp_pcb *tpcb, struct pbuf *p, err_
             ESP_LOGI(TAG, "file stor done\n");
 			fclose(f2stor);
 			ftp_pcb_close(s->data_pcb);
-
 			s->data_pcb=NULL;
-
 		}
   }
   
@@ -631,7 +630,7 @@ static void ftp_control_process(ftp_session_t *s, struct tcp_pcb *tpcb, struct p
 		if (response==230) {
 		  s->control_state = FTP_LOGGED;
 		  ESP_LOGI(TAG, "ftp: now logged in\n");
-		  xEventGroupSetBits(ftp_event_group, FTP_STOR_DONE);
+//		  xEventGroupSetBits(ftp_event_group, FTP_STOR_DONE);
 		  xEventGroupSetBits(ftp_event_group, FTP_LOGEING_OK);
 		} else {
 		  s->control_state = FTP_QUIT;
@@ -918,32 +917,21 @@ static void ftp_close(ftp_session_t *s)
 static void ftp_ul_task(void *pvParameter)
 {
 	int filecnt=0;
-	char srcname[100],dstname[100];
-	ESP_LOGI(TAG, "File upload task started.");			
-	xEventGroupWaitBits(wifi_sta_get_event_group(), WIFI_STA_EVENT_GROUP_CONNECTED_FLAG, pdFALSE, pdFALSE, portMAX_DELAY);
-	ftp_connect(&ftp_config);
-   	xEventGroupWaitBits(ftp_event_group, FTP_LOGEING_OK|FTP_ALL_DONE, pdFALSE, pdFALSE, portMAX_DELAY);//用户名密码发送成功，登录FTP服务器成功
-    if(xEventGroupGetBits(ftp_event_group)&FTP_LOGEING_OK)
-    {   
-        xEventGroupClearBits(ftp_event_group,FTP_LOGEING_OK);
-        ftp_MKD(&ftp_config, dirname);
-	    xEventGroupWaitBits(ftp_event_group, FTP_MKD_DONE, pdFALSE, pdFALSE, portMAX_DELAY);//目录创建成功 
-	    xEventGroupClearBits(ftp_event_group, FTP_CWD_DONE);
-        ftp_CWD(&ftp_config,dirname);
-        xEventGroupWaitBits(ftp_event_group, FTP_CWD_DONE, pdFALSE, pdFALSE, portMAX_DELAY);//目录转换成功 
-        ftp_MKD(&ftp_config, "rec-file");
-	    xEventGroupWaitBits(ftp_event_group, FTP_MKD_DONE, pdFALSE, pdFALSE, portMAX_DELAY);//目录创建成功 
-	    xEventGroupClearBits(ftp_event_group, FTP_CWD_DONE);
-        ftp_CWD(&ftp_config,"rec-file");
-        xEventGroupWaitBits(ftp_event_group, FTP_CWD_DONE, pdFALSE, pdFALSE, portMAX_DELAY);//目录转换成功     
+	char srcname[100],dstname[100];		
         filecnt=1;	
 	    while (1) 
 	    {
 	        xEventGroupWaitBits(ftp_event_group, FTP_STOR_DONE|FTP_ALL_DONE, pdFALSE, pdFALSE, portMAX_DELAY);	//文件传输完成	  
 	        if(xEventGroupGetBits(ftp_event_group)&FTP_ALL_DONE)
-		      break;
+	        {
+	            esp_wifi_stop();	
+				xEventGroupClearBits(ftp_event_group, FTP_ALL_DONE);
+				filecnt=1;
+			}
             else if(xEventGroupGetBits(ftp_event_group)&FTP_STOR_DONE)
 		    {
+		        if(filecnt==1)
+			        ESP_LOGI(TAG, "File upload task started.");	
 		        if(filecnt<wfile_num)
 	            {
 	                sprintf(srcname,"/sdcard/record/%02d_rec.pcm",filecnt);
@@ -1002,12 +990,12 @@ static void ftp_ul_task(void *pvParameter)
 		       {
 		    
 			       ESP_LOGI(TAG, "all files upload .");	
-			
-			       break;            
+	               xEventGroupClearBits(ftp_event_group, FTP_STOR_DONE);
+	               xEventGroupClearBits(ftp_event_group, FTP_DATALINK_OK);
+	               ftp_close(&ftp_config);				                
 		       }
-           }
-		   else break;
-	    }
+           }		  
+//	    }
     }
 	xEventGroupClearBits(ftp_event_group, FTP_STOR_DONE);
 	xEventGroupClearBits(ftp_event_group, FTP_DATALINK_OK);
@@ -1041,7 +1029,7 @@ void ftp_ul_process(int filenum,char* uptm)
 {
 
     char concnt=0;
-	esp_log_level_set("*", ESP_LOG_INFO);
+//	esp_log_level_set("*", ESP_LOG_INFO);
 	esp_log_level_set(TAG, ESP_LOG_INFO);
 	
     ESP_LOGI(TAG, "Initialising ftpupload");
@@ -1057,7 +1045,27 @@ void ftp_ul_process(int filenum,char* uptm)
 		
 	}
 	if(wifi_sta_is_connected())
-	    ftp_ul_init();
+	{
+	    ftp_config.control_state=FTP_CLOSED;
+		ftp_connect(&ftp_config);        
+		xEventGroupWaitBits(ftp_event_group, FTP_LOGEING_OK|FTP_ALL_DONE, pdFALSE, pdFALSE, portMAX_DELAY);//用户名密码发送成功，登录FTP服务器成功
+        if(xEventGroupGetBits(ftp_event_group)&FTP_LOGEING_OK)
+        {   
+            xEventGroupClearBits(ftp_event_group,FTP_LOGEING_OK);
+            ftp_MKD(&ftp_config, dirname);
+	        xEventGroupWaitBits(ftp_event_group, FTP_MKD_DONE, pdFALSE, pdFALSE, portMAX_DELAY);//目录创建成功 
+	        xEventGroupClearBits(ftp_event_group, FTP_CWD_DONE);
+            ftp_CWD(&ftp_config,dirname);
+            xEventGroupWaitBits(ftp_event_group, FTP_CWD_DONE, pdFALSE, pdFALSE, portMAX_DELAY);//目录转换成功 
+            ftp_MKD(&ftp_config, "rec-file");
+	        xEventGroupWaitBits(ftp_event_group, FTP_MKD_DONE, pdFALSE, pdFALSE, portMAX_DELAY);//目录创建成功 
+	        xEventGroupClearBits(ftp_event_group, FTP_CWD_DONE);
+            ftp_CWD(&ftp_config,"rec-file");
+            xEventGroupWaitBits(ftp_event_group, FTP_CWD_DONE, pdFALSE, pdFALSE, portMAX_DELAY);//目录转换成功 
+            
+            xEventGroupSetBits(ftp_event_group, FTP_STOR_DONE);
+    	}
+	}
 	else
 	{
 	    ESP_LOGI(TAG, "esp_wifi will stop!");	
